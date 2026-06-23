@@ -322,19 +322,35 @@ function M.restoreItemState(character, item)
     return changed
 end
 
-function M.eachStackedInventoryItem(player, callback)
-    if not player or not player.getInventory or not ArrayList then return end
+function M.eachStackedContainerItem(container, callback)
+    if not container or not container.getAllEvalRecurse or not ArrayList then return end
 
-    local inventory = player:getInventory()
-    if not inventory or not inventory.getAllEvalRecurse then return end
-
-    local items = inventory:getAllEvalRecurse(function(item)
+    local items = container:getAllEvalRecurse(function(item)
         return M.isStackedWeapon(item)
     end, ArrayList.new())
 
     for index = 0, items:size() - 1 do
         callback(items:get(index))
     end
+end
+
+function M.eachStackedItemTree(item, callback)
+    if not item then return end
+
+    if M.isStackedWeapon(item) then
+        callback(item)
+    end
+
+    local inventory = item.getInventory and item:getInventory()
+    if inventory then
+        M.eachStackedContainerItem(inventory, callback)
+    end
+end
+
+function M.eachStackedInventoryItem(player, callback)
+    if not player or not player.getInventory then return end
+
+    M.eachStackedContainerItem(player:getInventory(), callback)
 end
 
 function M.restoreInventory(player)
@@ -346,6 +362,18 @@ end
 function M.persistInventory(player)
     M.eachStackedInventoryItem(player, function(item)
         M.persistItemState(item)
+    end)
+end
+
+function M.restoreItemTreeState(character, item)
+    M.eachStackedItemTree(item, function(stackedItem)
+        M.restoreItemState(character, stackedItem)
+    end)
+end
+
+function M.persistItemTreeState(item)
+    M.eachStackedItemTree(item, function(stackedItem)
+        M.persistItemState(stackedItem)
     end)
 end
 

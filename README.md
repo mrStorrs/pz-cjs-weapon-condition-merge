@@ -14,6 +14,7 @@ Behavior:
 - The donor weapon's condition max/current are multiplied by the sandbox condition multiplier, then added to the kept weapon.
 - Damage is recalculated from the kept weapon's original min/max damage.
 - Stacked condition is stored in item mod data and restored when the save is loaded.
+- Stacked condition is refreshed when moved into storage and restored when taken back out.
 
 Sandbox defaults:
 
