@@ -1,0 +1,31 @@
+VERSION = 1,
+
+option CJSWeaponConditionMerge.ConditionMultiplier
+{
+    type = double,
+    min = 0.1,
+    max = 100.0,
+    default = 1.0,
+    page = CJSWeaponConditionMerge,
+    translation = CJSWeaponConditionMerge_ConditionMultiplier,
+}
+
+option CJSWeaponConditionMerge.DamagePercentPerStack
+{
+    type = double,
+    min = 0.0,
+    max = 100.0,
+    default = 1.0,
+    page = CJSWeaponConditionMerge,
+    translation = CJSWeaponConditionMerge_DamagePercentPerStack,
+}
+
+option CJSWeaponConditionMerge.MergeDuration
+{
+    type = integer,
+    min = 1,
+    max = 600,
+    default = 60,
+    page = CJSWeaponConditionMerge,
+    translation = CJSWeaponConditionMerge_MergeDuration,
+}

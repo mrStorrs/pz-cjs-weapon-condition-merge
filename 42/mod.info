@@ -1,0 +1,7 @@
+name=CJS Weapon Condition Merge
+id=cjsWeaponConditionMerge
+description=Merge matching melee weapons to combine condition, stack names, and scale damage.
+poster=poster.png
+author=CJ Storrs
+modversion=0.1.0
+versionMin=42.0.0
