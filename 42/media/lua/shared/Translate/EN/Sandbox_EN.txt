@@ -2,7 +2,7 @@ Sandbox_EN = {
     Sandbox_CJSWeaponConditionMerge = "CJS Weapon Condition Merge",
 
     Sandbox_CJSWeaponConditionMerge_ConditionMultiplier = "Condition Multiplier",
-    Sandbox_CJSWeaponConditionMerge_ConditionMultiplier_tooltip = "Multiplies both the kept weapon and donor weapon condition before adding them together. 1.0 means normal additive merging.",
+    Sandbox_CJSWeaponConditionMerge_ConditionMultiplier_tooltip = "Multiplies only the donor weapon condition before adding it to the kept weapon. 1.0 means normal additive merging.",
 
     Sandbox_CJSWeaponConditionMerge_DamagePercentPerStack = "Damage Percent Per Stack",
     Sandbox_CJSWeaponConditionMerge_DamagePercentPerStack_tooltip = "Extra min/max damage per stack above 1x. 1.0 means a 2x weapon deals 1% more damage, 3x deals 2% more, and so on.",
