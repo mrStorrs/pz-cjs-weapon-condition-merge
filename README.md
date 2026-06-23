@@ -13,6 +13,7 @@ Behavior:
 - The kept weapon is renamed to `Base Name Nx`.
 - The donor weapon's condition max/current are multiplied by the sandbox condition multiplier, then added to the kept weapon.
 - Damage is recalculated from the kept weapon's original min/max damage.
+- Stacked condition is stored in item mod data and restored when the save is loaded.
 
 Sandbox defaults:
 

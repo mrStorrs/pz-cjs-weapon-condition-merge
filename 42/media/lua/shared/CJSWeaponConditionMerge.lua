@@ -5,6 +5,8 @@ local DATA_KEYS = {
     baseName = "cjsWcmBaseName",
     baseMinDamage = "cjsWcmBaseMinDamage",
     baseMaxDamage = "cjsWcmBaseMaxDamage",
+    condition = "cjsWcmCondition",
+    conditionMax = "cjsWcmConditionMax",
 }
 
 local DEFAULTS = {
@@ -32,6 +34,10 @@ end
 
 local function round(value)
     return math.floor(value + 0.5)
+end
+
+local function nearlyEqual(left, right)
+    return math.abs((left or 0) - (right or 0)) < 0.0001
 end
 
 local function parseStackedName(name)
@@ -118,6 +124,21 @@ local function baseMaxDamage(item)
     return value
 end
 
+local function scriptConditionMax(item)
+    local scriptItem = item and item.getScriptItem and item:getScriptItem()
+    if scriptItem and scriptItem.getConditionMax then
+        local ok, value = pcall(function()
+            return scriptItem:getConditionMax()
+        end)
+
+        if ok and tonumber(value) then
+            return tonumber(value)
+        end
+    end
+
+    return item and item.getConditionMax and item:getConditionMax() or 0
+end
+
 local function syncWeapon(character, weapon)
     if syncHandWeaponFields then
         syncHandWeaponFields(character, weapon)
@@ -128,6 +149,61 @@ local function syncWeapon(character, weapon)
     elseif weapon and weapon.syncItemFields then
         weapon:syncItemFields()
     end
+end
+
+local function persistConditionState(item, conditionMax, condition)
+    local data = modData(item)
+    if not data then return end
+
+    data[DATA_KEYS.conditionMax] = conditionMax or item:getConditionMax()
+    data[DATA_KEYS.condition] = condition or item:getCondition()
+end
+
+local function storedConditionMax(item, data, stacks)
+    local storedMax = tonumber(data[DATA_KEYS.conditionMax])
+    if storedMax and storedMax >= 1 then
+        return round(storedMax)
+    end
+
+    local baseMax = scriptConditionMax(item)
+    if stacks > 1 and baseMax > 0 then
+        return round(baseMax * stacks)
+    end
+
+    return nil
+end
+
+local function storedCondition(item, data, targetMax)
+    local storedValue = tonumber(data[DATA_KEYS.condition])
+    if storedValue and storedValue >= 0 then
+        return clamp(round(storedValue), 0, targetMax)
+    end
+
+    local currentMax = item:getConditionMax()
+    if currentMax > 0 and targetMax > currentMax then
+        return clamp(round((item:getCondition() / currentMax) * targetMax), 0, targetMax)
+    end
+
+    return clamp(item:getCondition(), 0, targetMax)
+end
+
+local function applyDamage(item, stacks)
+    local damageFactor = 1.0 + ((stacks - 1) * (M.damagePercentPerStack() / 100.0))
+    local newMinDamage = baseMinDamage(item) * damageFactor
+    local newMaxDamage = baseMaxDamage(item) * damageFactor
+    local changed = false
+
+    if not nearlyEqual(item:getMinDamage(), newMinDamage) then
+        item:setMinDamage(newMinDamage)
+        changed = true
+    end
+
+    if not nearlyEqual(item:getMaxDamage(), newMaxDamage) then
+        item:setMaxDamage(newMaxDamage)
+        changed = true
+    end
+
+    return changed
 end
 
 function M.conditionMultiplier()
@@ -175,6 +251,104 @@ function M.canMerge(target, donor)
     return target:getFullType() == donor:getFullType()
 end
 
+function M.isStackedWeapon(item)
+    return M.isMergeableWeapon(item) and currentStacks(item) > 1
+end
+
+function M.persistItemState(item)
+    if not M.isStackedWeapon(item) then
+        return
+    end
+
+    persistConditionState(item)
+end
+
+function M.restoreItemState(character, item)
+    if not M.isStackedWeapon(item) then
+        return false
+    end
+
+    local data = modData(item)
+    if not data then
+        return false
+    end
+
+    local stacks = currentStacks(item)
+    local targetMax = storedConditionMax(item, data, stacks)
+    if not targetMax then
+        return false
+    end
+
+    local targetCondition = storedCondition(item, data, targetMax)
+    local changed = false
+
+    if item:getConditionMax() ~= targetMax then
+        item:setConditionMax(targetMax)
+        changed = true
+    end
+
+    if item:getCondition() ~= targetCondition then
+        item:setConditionNoSound(targetCondition)
+        changed = true
+    end
+
+    if targetCondition > 0 and item.setBroken and item:isBroken() then
+        item:setBroken(false)
+        changed = true
+    end
+
+    if data[DATA_KEYS.stacks] ~= stacks then
+        data[DATA_KEYS.stacks] = stacks
+    end
+
+    data[DATA_KEYS.baseName] = baseName(item)
+
+    local expectedName = baseName(item) .. " " .. tostring(stacks) .. "x"
+    if displayName(item) ~= expectedName then
+        item:setName(expectedName)
+        changed = true
+    end
+
+    if applyDamage(item, stacks) then
+        changed = true
+    end
+
+    persistConditionState(item, targetMax, targetCondition)
+
+    if changed then
+        syncWeapon(character, item)
+    end
+
+    return changed
+end
+
+function M.eachStackedInventoryItem(player, callback)
+    if not player or not player.getInventory or not ArrayList then return end
+
+    local inventory = player:getInventory()
+    if not inventory or not inventory.getAllEvalRecurse then return end
+
+    local items = inventory:getAllEvalRecurse(function(item)
+        return M.isStackedWeapon(item)
+    end, ArrayList.new())
+
+    for index = 0, items:size() - 1 do
+        callback(items:get(index))
+    end
+end
+
+function M.restoreInventory(player)
+    M.eachStackedInventoryItem(player, function(item)
+        M.restoreItemState(player, item)
+    end)
+end
+
+function M.persistInventory(player)
+    M.eachStackedInventoryItem(player, function(item)
+        M.persistItemState(item)
+    end)
+end
+
 function M.merge(character, target, donor)
     if not M.canMerge(target, donor) then
         return false
@@ -203,15 +377,15 @@ function M.merge(character, target, donor)
         target:setBroken(false)
     end
 
-    local damageFactor = 1.0 + ((newStacks - 1) * (M.damagePercentPerStack() / 100.0))
-    target:setMinDamage(baseMinDamage(target) * damageFactor)
-    target:setMaxDamage(baseMaxDamage(target) * damageFactor)
+    applyDamage(target, newStacks)
 
     local data = modData(target)
     if data then
         data[DATA_KEYS.stacks] = newStacks
         data[DATA_KEYS.baseName] = baseName(target)
     end
+
+    persistConditionState(target, newMaxCondition, newCondition)
 
     target:setName(baseName(target) .. " " .. tostring(newStacks) .. "x")
     syncWeapon(character, target)
@@ -235,3 +409,60 @@ function M.debugName()
 end
 
 CJSWeaponConditionMerge = M
+
+local function forEachPlayer(callback)
+    if not getSpecificPlayer then return end
+
+    if getNumActivePlayers then
+        for playerIndex = 0, getNumActivePlayers() - 1 do
+            callback(getSpecificPlayer(playerIndex))
+        end
+        return
+    end
+
+    callback(getSpecificPlayer(0))
+end
+
+local startupScansRemaining = 120
+
+local function restoreAllPlayers()
+    forEachPlayer(function(player)
+        M.restoreInventory(player)
+    end)
+end
+
+local function persistAllPlayers()
+    forEachPlayer(function(player)
+        M.persistInventory(player)
+    end)
+end
+
+local function onCreatePlayer(playerIndex, player)
+    M.restoreInventory(player or (getSpecificPlayer and getSpecificPlayer(playerIndex or 0)))
+end
+
+local function onPlayerUpdate(player)
+    if startupScansRemaining <= 0 then
+        Events.OnPlayerUpdate.Remove(onPlayerUpdate)
+        return
+    end
+
+    startupScansRemaining = startupScansRemaining - 1
+    M.restoreInventory(player)
+end
+
+if Events and Events.OnGameStart then
+    Events.OnGameStart.Add(restoreAllPlayers)
+end
+
+if Events and Events.OnCreatePlayer then
+    Events.OnCreatePlayer.Add(onCreatePlayer)
+end
+
+if Events and Events.OnPlayerUpdate then
+    Events.OnPlayerUpdate.Add(onPlayerUpdate)
+end
+
+if Events and Events.OnSave then
+    Events.OnSave.Add(persistAllPlayers)
+end

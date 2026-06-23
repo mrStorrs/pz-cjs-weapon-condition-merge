@@ -15,9 +15,10 @@ local function selectedInventoryItem(value)
     return nil
 end
 
-local function selectedMergeTarget(items)
+local function selectedMergeTarget(playerObj, items)
     for _, value in ipairs(items) do
         local item = selectedInventoryItem(value)
+        CJSWeaponConditionMerge.restoreItemState(playerObj, item)
         if CJSWeaponConditionMerge.isMergeableWeapon(item) then
             return item
         end
@@ -54,6 +55,8 @@ local function queueMerge(playerObj, target, donor)
 end
 
 local function isUsableDonor(playerObj, target, donor)
+    CJSWeaponConditionMerge.restoreItemState(playerObj, donor)
+
     if not CJSWeaponConditionMerge.canMerge(target, donor) then
         return false
     end
@@ -95,7 +98,7 @@ local function onFillInventoryObjectContextMenu(playerIndex, context, items)
     local playerObj = getSpecificPlayer(playerIndex)
     if not playerObj then return end
 
-    local target = selectedMergeTarget(items)
+    local target = selectedMergeTarget(playerObj, items)
     if not target then return end
 
     local donors = matchingDonors(playerObj, target)
