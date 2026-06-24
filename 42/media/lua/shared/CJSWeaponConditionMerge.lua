@@ -387,15 +387,11 @@ function M.merge(character, target, donor)
     local newStacks = targetStacks + donorStacks
     local conditionMultiplier = M.conditionMultiplier()
 
-    local newMaxCondition = round(target:getConditionMax() + (donor:getConditionMax() * conditionMultiplier))
     local newCondition = round(target:getCondition() + (donor:getCondition() * conditionMultiplier))
+    local newMaxCondition = newCondition
 
     if newMaxCondition < 1 then
         newMaxCondition = 1
-    end
-
-    if newCondition > newMaxCondition then
-        newCondition = newMaxCondition
     end
 
     target:setConditionMax(newMaxCondition)

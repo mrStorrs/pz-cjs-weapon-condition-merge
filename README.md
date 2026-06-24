@@ -11,7 +11,8 @@ Behavior:
 - Favorited or equipped donor weapons are ignored.
 - Stack counts add together: `1x + 1x = 2x`, `2x + 1x = 3x`, `2x + 2x = 4x`.
 - The kept weapon is renamed to `Base Name Nx`.
-- The donor weapon's condition max/current are multiplied by the sandbox condition multiplier, then added to the kept weapon.
+- The donor weapon's current condition is multiplied by the sandbox condition multiplier, then added to the kept weapon.
+- The merged weapon's max condition becomes the new current condition, so `10/10 + 5/10 = 15/15`.
 - Damage is recalculated from the kept weapon's original min/max damage.
 - Stacked condition is stored in item mod data and restored when the save is loaded.
 - Stacked condition is refreshed when moved into storage and restored when taken back out.
