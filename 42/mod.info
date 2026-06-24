@@ -3,5 +3,5 @@ id=cjsWeaponConditionMerge
 description=Merge matching melee weapons to combine condition, stack names, and scale damage.
 poster=poster.png
 author=CJ Storrs
-modversion=0.1.4
+modversion=0.1.5
 versionMin=42.0.0

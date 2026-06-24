@@ -86,8 +86,9 @@ local function baseName(item)
         return data[DATA_KEYS.baseName]
     end
 
-    local parsedName = parseStackedName(displayName(item))
-    local name = parsedName or displayName(item)
+    local externalName = M.externalBaseName and M.externalBaseName(item) or nil
+    local parsedName = parseStackedName(externalName or displayName(item))
+    local name = parsedName or externalName or displayName(item)
 
     if data then
         data[DATA_KEYS.baseName] = name
@@ -140,11 +141,11 @@ local function scriptConditionMax(item)
 end
 
 local function syncWeapon(character, weapon)
-    if syncHandWeaponFields then
+    if character and syncHandWeaponFields then
         syncHandWeaponFields(character, weapon)
     end
 
-    if syncItemFields then
+    if character and syncItemFields then
         syncItemFields(character, weapon)
     elseif weapon and weapon.syncItemFields then
         weapon:syncItemFields()
@@ -227,6 +228,10 @@ function M.stackLabel(item)
     return tostring(currentStacks(item)) .. "x"
 end
 
+function M.stackedDisplayName(item)
+    return baseName(item) .. " " .. M.stackLabel(item)
+end
+
 function M.isMergeableWeapon(item)
     if not item or not instanceof or not instanceof(item, "HandWeapon") then
         return false
@@ -260,12 +265,24 @@ function M.persistItemState(item)
         return
     end
 
+    if M.beforePersistItemState and M.beforePersistItemState(item) then
+        return
+    end
+
     persistConditionState(item)
+
+    if M.afterPersistItemState then
+        M.afterPersistItemState(item)
+    end
 end
 
 function M.restoreItemState(character, item)
     if not M.isStackedWeapon(item) then
         return false
+    end
+
+    if M.beforeRestoreItemState and M.beforeRestoreItemState(character, item) then
+        return true
     end
 
     local data = modData(item)
@@ -303,7 +320,7 @@ function M.restoreItemState(character, item)
 
     data[DATA_KEYS.baseName] = baseName(item)
 
-    local expectedName = baseName(item) .. " " .. tostring(stacks) .. "x"
+    local expectedName = M.stackedDisplayName(item)
     if displayName(item) ~= expectedName then
         item:setName(expectedName)
         changed = true
@@ -317,6 +334,10 @@ function M.restoreItemState(character, item)
 
     if changed then
         syncWeapon(character, item)
+    end
+
+    if M.afterRestoreItemState then
+        M.afterRestoreItemState(character, item, changed)
     end
 
     return changed
@@ -411,7 +432,12 @@ function M.merge(character, target, donor)
 
     persistConditionState(target, newMaxCondition, newCondition)
 
-    target:setName(baseName(target) .. " " .. tostring(newStacks) .. "x")
+    target:setName(M.stackedDisplayName(target))
+
+    if M.afterMerge then
+        M.afterMerge(character, target, donor)
+    end
+
     syncWeapon(character, target)
 
     local donorContainer = donor:getContainer()
