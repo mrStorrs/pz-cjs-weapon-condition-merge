@@ -15,6 +15,16 @@ local DEFAULTS = {
     MergeDuration = 60,
 }
 
+local FIREARM_PART_TYPES = {
+    "Scope",
+    "Canon",
+    "Sling",
+    "Stock",
+    "Recoilpad",
+    "RecoilPad",
+    "Clip",
+}
+
 local M = {}
 
 local function sandboxOption(key)
@@ -140,6 +150,60 @@ local function scriptConditionMax(item)
     return item and item.getConditionMax and item:getConditionMax() or 0
 end
 
+local function safeMethodValue(item, methodName, ...)
+    if not item or not item[methodName] then
+        return nil
+    end
+
+    local ok, value = pcall(item[methodName], item, ...)
+    if ok then
+        return value
+    end
+
+    return nil
+end
+
+local function hasAmmoCapacity(item)
+    local maxAmmo = tonumber(safeMethodValue(item, "getMaxAmmo"))
+    if maxAmmo and maxAmmo > 0 then
+        return true
+    end
+
+    return safeMethodValue(item, "getAmmoType") ~= nil
+        or safeMethodValue(item, "getMagazineType") ~= nil
+end
+
+local function hasLoadedAmmo(item)
+    local ammoCount = tonumber(safeMethodValue(item, "getCurrentAmmoCount")) or 0
+    if ammoCount > 0 then
+        return true
+    end
+
+    return safeMethodValue(item, "isRoundChambered") == true
+        or safeMethodValue(item, "isContainsClip") == true
+end
+
+local function hasAttachedWeaponParts(item)
+    if not item then
+        return false
+    end
+
+    if item.getWeaponPart then
+        for _, partType in ipairs(FIREARM_PART_TYPES) do
+            if safeMethodValue(item, "getWeaponPart", partType) ~= nil then
+                return true
+            end
+        end
+    end
+
+    return safeMethodValue(item, "getScope") ~= nil
+        or safeMethodValue(item, "getCanon") ~= nil
+        or safeMethodValue(item, "getSling") ~= nil
+        or safeMethodValue(item, "getStock") ~= nil
+        or safeMethodValue(item, "getRecoilpad") ~= nil
+        or safeMethodValue(item, "getClip") ~= nil
+end
+
 local function syncWeapon(character, weapon)
     if character and syncHandWeaponFields then
         syncHandWeaponFields(character, weapon)
@@ -232,16 +296,36 @@ function M.stackedDisplayName(item)
     return baseName(item) .. " " .. M.stackLabel(item)
 end
 
+function M.isFirearm(item)
+    if not item or not instanceof or not instanceof(item, "HandWeapon") then
+        return false
+    end
+
+    if safeMethodValue(item, "isRanged") == true then
+        return true
+    end
+
+    return hasAmmoCapacity(item)
+end
+
 function M.isMergeableWeapon(item)
     if not item or not instanceof or not instanceof(item, "HandWeapon") then
         return false
     end
 
-    if item.getMaxAmmo and item:getMaxAmmo() > 0 then
+    return item:getConditionMax() > 0
+end
+
+function M.isSafeMergeDonor(item)
+    if not M.isMergeableWeapon(item) then
         return false
     end
 
-    return item:getConditionMax() > 0
+    if not M.isFirearm(item) then
+        return true
+    end
+
+    return not hasLoadedAmmo(item) and not hasAttachedWeaponParts(item)
 end
 
 function M.canMerge(target, donor)
@@ -253,7 +337,7 @@ function M.canMerge(target, donor)
         return false
     end
 
-    return target:getFullType() == donor:getFullType()
+    return target:getFullType() == donor:getFullType() and M.isSafeMergeDonor(donor)
 end
 
 function M.isStackedWeapon(item)
