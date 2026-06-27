@@ -311,6 +311,8 @@ function M.reapplyVorpally(character, weapon)
         return false
     end
 
+    persistVorpallyCondition(weapon)
+
     M._cjsWcmVorpallyReapplyDepth = (M._cjsWcmVorpallyReapplyDepth or 0) + 1
     local ok, err = pcall(reapply, weapon)
     M._cjsWcmVorpallyReapplyDepth = M._cjsWcmVorpallyReapplyDepth - 1
@@ -325,17 +327,18 @@ function M.reapplyVorpally(character, weapon)
     return true
 end
 
+local function isVorpallyRestoring()
+    return (M._cjsWcmVorpallyReplayDepth or 0) > 0
+        or (M._cjsWcmVorpallyReapplyDepth or 0) > 0
+end
+
 local previousBeforeRestore = M.beforeRestoreItemState
 function M.beforeRestoreItemState(character, weapon)
     if previousBeforeRestore and previousBeforeRestore(character, weapon) then
         return true
     end
 
-    if (M._cjsWcmVorpallyReplayDepth or 0) > 0 then
-        return false
-    end
-
-    if (M._cjsWcmVorpallyReapplyDepth or 0) > 0 then
+    if isVorpallyRestoring() then
         return false
     end
 
@@ -347,7 +350,28 @@ function M.beforeRestoreItemState(character, weapon)
         return true
     end
 
-    return M.reapplyVorpally(character, weapon)
+    return false
+end
+
+local previousAfterRestore = M.afterRestoreItemState
+function M.afterRestoreItemState(character, weapon, changed)
+    if previousAfterRestore then
+        previousAfterRestore(character, weapon, changed)
+    end
+
+    if isVorpallyRestoring() then
+        return
+    end
+
+    if not M.isStackedWeapon or not M.isStackedWeapon(weapon) then
+        return
+    end
+
+    if not hasVorpallyData(weapon) or isMarkedApplied(weapon) then
+        return
+    end
+
+    M.reapplyVorpally(character, weapon)
 end
 
 local previousBeforePersist = M.beforePersistItemState
@@ -364,7 +388,8 @@ function M.beforePersistItemState(weapon)
         return false
     end
 
-    return persistVorpallyCondition(weapon)
+    persistVorpallyCondition(weapon)
+    return false
 end
 
 local previousAfterMerge = M.afterMerge
