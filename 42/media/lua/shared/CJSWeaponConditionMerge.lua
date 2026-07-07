@@ -258,6 +258,21 @@ local function storedCondition(item, data, targetMax)
     return currentCondition
 end
 
+local function liveCondition(sourceCondition, sourceConditionMax, targetMax)
+    local currentMax = tonumber(sourceConditionMax) or targetMax
+    local currentCondition = tonumber(sourceCondition) or 0
+
+    if currentMax > 0 then
+        currentCondition = clamp(currentCondition, 0, currentMax)
+
+        if currentMax ~= targetMax then
+            return clamp(round((currentCondition / currentMax) * targetMax), 0, targetMax)
+        end
+    end
+
+    return clamp(round(currentCondition), 0, targetMax)
+end
+
 local function applyDamage(item, stacks)
     local damageFactor = 1.0 + ((stacks - 1) * (M.damagePercentPerStack() / 100.0))
     local newMinDamage = baseMinDamage(item) * damageFactor
@@ -272,6 +287,49 @@ local function applyDamage(item, stacks)
     if not nearlyEqual(item:getMaxDamage(), newMaxDamage) then
         item:setMaxDamage(newMaxDamage)
         changed = true
+    end
+
+    return changed
+end
+
+local function applyItemState(character, item, data, stacks, targetMax, targetCondition)
+    local changed = false
+
+    if item:getConditionMax() ~= targetMax then
+        item:setConditionMax(targetMax)
+        changed = true
+    end
+
+    if item:getCondition() ~= targetCondition then
+        item:setConditionNoSound(targetCondition)
+        changed = true
+    end
+
+    if targetCondition > 0 and item.setBroken and item:isBroken() then
+        item:setBroken(false)
+        changed = true
+    end
+
+    if data[DATA_KEYS.stacks] ~= stacks then
+        data[DATA_KEYS.stacks] = stacks
+    end
+
+    data[DATA_KEYS.baseName] = baseName(item)
+
+    local expectedName = M.stackedDisplayName(item)
+    if displayName(item) ~= expectedName then
+        item:setName(expectedName)
+        changed = true
+    end
+
+    if applyDamage(item, stacks) then
+        changed = true
+    end
+
+    persistConditionState(item, targetMax, targetCondition)
+
+    if changed then
+        syncWeapon(character, item)
     end
 
     return changed
@@ -387,50 +445,36 @@ function M.restoreItemState(character, item)
     end
 
     local targetCondition = storedCondition(item, data, targetMax)
-    local changed = false
-
-    if item:getConditionMax() ~= targetMax then
-        item:setConditionMax(targetMax)
-        changed = true
-    end
-
-    if item:getCondition() ~= targetCondition then
-        item:setConditionNoSound(targetCondition)
-        changed = true
-    end
-
-    if targetCondition > 0 and item.setBroken and item:isBroken() then
-        item:setBroken(false)
-        changed = true
-    end
-
-    if data[DATA_KEYS.stacks] ~= stacks then
-        data[DATA_KEYS.stacks] = stacks
-    end
-
-    data[DATA_KEYS.baseName] = baseName(item)
-
-    local expectedName = M.stackedDisplayName(item)
-    if displayName(item) ~= expectedName then
-        item:setName(expectedName)
-        changed = true
-    end
-
-    if applyDamage(item, stacks) then
-        changed = true
-    end
-
-    persistConditionState(item, targetMax, targetCondition)
-
-    if changed then
-        syncWeapon(character, item)
-    end
+    local changed = applyItemState(character, item, data, stacks, targetMax, targetCondition)
 
     if M.afterRestoreItemState then
         M.afterRestoreItemState(character, item, changed)
     end
 
     return changed
+end
+
+function M.refreshItemState(character, item, sourceCondition, sourceConditionMax)
+    if not M.isStackedWeapon(item) then
+        return false
+    end
+
+    local data = modData(item)
+    if not data then
+        return false
+    end
+
+    local stacks = currentStacks(item)
+    local targetMax = storedConditionMax(item, data, stacks)
+    if not targetMax then
+        return false
+    end
+
+    local currentCondition = sourceCondition or item:getCondition()
+    local currentMax = sourceConditionMax or item:getConditionMax()
+    local targetCondition = liveCondition(currentCondition, currentMax, targetMax)
+
+    return applyItemState(character, item, data, stacks, targetMax, targetCondition)
 end
 
 function M.eachStackedContainerItem(container, callback)
@@ -563,7 +607,7 @@ local function forEachPlayer(callback)
     callback(getSpecificPlayer(0))
 end
 
-local startupScansRemaining = 120
+local loadRestoreScansRemaining = 120
 
 local function restoreAllPlayers()
     forEachPlayer(function(player)
@@ -581,14 +625,43 @@ local function onCreatePlayer(playerIndex, player)
     M.restoreInventory(player or (getSpecificPlayer and getSpecificPlayer(playerIndex or 0)))
 end
 
-local function onPlayerUpdate(player)
-    if startupScansRemaining <= 0 then
-        Events.OnPlayerUpdate.Remove(onPlayerUpdate)
+local function onLoadRestorePlayerUpdate(player)
+    if loadRestoreScansRemaining <= 0 then
+        Events.OnPlayerUpdate.Remove(onLoadRestorePlayerUpdate)
         return
     end
 
-    startupScansRemaining = startupScansRemaining - 1
+    loadRestoreScansRemaining = loadRestoreScansRemaining - 1
     M.restoreInventory(player)
+end
+
+local function persistEquippedWeapon(weapon, seen)
+    if not M.isStackedWeapon(weapon) then
+        return
+    end
+
+    local key = tostring(weapon:getID())
+    if seen[key] then
+        return
+    end
+
+    seen[key] = true
+    M.persistItemState(weapon)
+end
+
+local function persistEquippedWeapons(player)
+    if not player then
+        return
+    end
+
+    local seen = {}
+
+    persistEquippedWeapon(player:getPrimaryHandItem(), seen)
+    persistEquippedWeapon(player:getSecondaryHandItem(), seen)
+end
+
+local function onPlayerUpdate(player)
+    persistEquippedWeapons(player)
 end
 
 local function persistWeapon(weapon)
@@ -630,6 +703,7 @@ if Events and Events.OnCreatePlayer then
 end
 
 if Events and Events.OnPlayerUpdate then
+    Events.OnPlayerUpdate.Add(onLoadRestorePlayerUpdate)
     Events.OnPlayerUpdate.Add(onPlayerUpdate)
 end
 

@@ -2,14 +2,6 @@ require "CJSWeaponConditionMerge"
 require "TimedActions/ISInventoryTransferAction"
 require "TimedActions/ISDropWorldItemAction"
 
-local function isCharacterInventoryContainer(container, character)
-    if not container or not character or not container.isInCharacterInventory then
-        return false
-    end
-
-    return container:isInCharacterInventory(character)
-end
-
 if ISInventoryTransferAction and ISInventoryTransferAction.transferItem and
         not ISInventoryTransferAction.cjsWeaponConditionMergePatched then
     local originalTransferItem = ISInventoryTransferAction.transferItem
@@ -17,21 +9,13 @@ if ISInventoryTransferAction and ISInventoryTransferAction.transferItem and
     function ISInventoryTransferAction:transferItem(item)
         local merge = CJSWeaponConditionMerge
         if merge and item then
-            if isCharacterInventoryContainer(self.srcContainer, self.character) then
-                merge.persistItemTreeState(item)
-            else
-                merge.restoreItemTreeState(self.character, item)
-            end
+            merge.persistItemTreeState(item)
         end
 
         local result = originalTransferItem(self, item)
 
         if merge and item then
-            if isCharacterInventoryContainer(self.destContainer, self.character) then
-                merge.restoreItemTreeState(self.character, item)
-            else
-                merge.persistItemTreeState(item)
-            end
+            merge.persistItemTreeState(item)
         end
 
         return result
@@ -49,7 +33,13 @@ if ISDropWorldItemAction and ISDropWorldItemAction.complete and
             CJSWeaponConditionMerge.persistItemTreeState(self.item)
         end
 
-        return originalDropComplete(self)
+        local result = originalDropComplete(self)
+
+        if CJSWeaponConditionMerge and self.item then
+            CJSWeaponConditionMerge.persistItemTreeState(self.item)
+        end
+
+        return result
     end
 
     ISDropWorldItemAction.cjsWeaponConditionMergePatched = true

@@ -18,7 +18,6 @@ end
 local function selectedMergeTarget(playerObj, items)
     for _, value in ipairs(items) do
         local item = selectedInventoryItem(value)
-        CJSWeaponConditionMerge.restoreItemState(playerObj, item)
         if CJSWeaponConditionMerge.isMergeableWeapon(item) then
             return item
         end
@@ -55,8 +54,6 @@ local function queueMerge(playerObj, target, donor)
 end
 
 local function isUsableDonor(playerObj, target, donor)
-    CJSWeaponConditionMerge.restoreItemState(playerObj, donor)
-
     if not CJSWeaponConditionMerge.canMerge(target, donor) then
         return false
     end

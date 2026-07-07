@@ -148,15 +148,22 @@ local function patchForeignStats()
     foreignStats.cjsWcmOriginalReplay = originalReplay
 
     function foreignStats.replay(weapon)
+        local sourceCondition = nil
+        local sourceConditionMax = nil
+        if weapon then
+            sourceCondition = weapon:getCondition()
+            sourceConditionMax = weapon:getConditionMax()
+        end
+
         local result = originalReplay(weapon)
 
-        if M.isStackedWeapon and M.isStackedWeapon(weapon) then
+        if M.isStackedWeapon and M.isStackedWeapon(weapon) and M.refreshItemState then
             M._cjsWcmVorpallyReplayDepth = (M._cjsWcmVorpallyReplayDepth or 0) + 1
-            local ok, err = pcall(M.restoreItemState, nil, weapon)
+            local ok, err = pcall(M.refreshItemState, nil, weapon, sourceCondition, sourceConditionMax)
             M._cjsWcmVorpallyReplayDepth = M._cjsWcmVorpallyReplayDepth - 1
 
             if not ok then
-                log("Weapon Mastery foreign-stat replay failed: " .. tostring(err))
+                log("Weapon Mastery foreign-stat refresh failed: " .. tostring(err))
             end
         end
 
@@ -311,7 +318,11 @@ function M.reapplyVorpally(character, weapon)
         return false
     end
 
-    persistVorpallyCondition(weapon)
+    if M.persistItemState then
+        M.persistItemState(weapon)
+    else
+        persistVorpallyCondition(weapon)
+    end
 
     M._cjsWcmVorpallyReapplyDepth = (M._cjsWcmVorpallyReapplyDepth or 0) + 1
     local ok, err = pcall(reapply, weapon)
@@ -327,7 +338,7 @@ function M.reapplyVorpally(character, weapon)
     return true
 end
 
-local function isVorpallyRestoring()
+local function isVorpallyRecalculating()
     return (M._cjsWcmVorpallyReplayDepth or 0) > 0
         or (M._cjsWcmVorpallyReapplyDepth or 0) > 0
 end
@@ -338,7 +349,7 @@ function M.beforeRestoreItemState(character, weapon)
         return true
     end
 
-    if isVorpallyRestoring() then
+    if isVorpallyRecalculating() then
         return false
     end
 
@@ -359,7 +370,7 @@ function M.afterRestoreItemState(character, weapon, changed)
         previousAfterRestore(character, weapon, changed)
     end
 
-    if isVorpallyRestoring() then
+    if isVorpallyRecalculating() then
         return
     end
 
