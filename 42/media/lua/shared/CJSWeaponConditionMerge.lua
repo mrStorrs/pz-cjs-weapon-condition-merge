@@ -239,17 +239,23 @@ local function storedConditionMax(item, data, stacks)
 end
 
 local function storedCondition(item, data, targetMax)
+    local currentMax = item:getConditionMax()
+    local currentCondition = clamp(item:getCondition(), 0, targetMax)
+
+    if currentMax == targetMax then
+        return currentCondition
+    end
+
     local storedValue = tonumber(data[DATA_KEYS.condition])
     if storedValue and storedValue >= 0 then
         return clamp(round(storedValue), 0, targetMax)
     end
 
-    local currentMax = item:getConditionMax()
     if currentMax > 0 and targetMax > currentMax then
-        return clamp(round((item:getCondition() / currentMax) * targetMax), 0, targetMax)
+        return clamp(round((currentCondition / currentMax) * targetMax), 0, targetMax)
     end
 
-    return clamp(item:getCondition(), 0, targetMax)
+    return currentCondition
 end
 
 local function applyDamage(item, stacks)
@@ -585,6 +591,36 @@ local function onPlayerUpdate(player)
     M.restoreInventory(player)
 end
 
+local function persistWeapon(weapon)
+    M.persistItemState(weapon)
+end
+
+local function onHitZombie(_zombie, _wielder, _bodyPart, weapon)
+    persistWeapon(weapon)
+end
+
+local function onWeaponHitCharacter(_wielder, _target, weapon, _damage)
+    persistWeapon(weapon)
+end
+
+local function onWeaponHitThumpable(_character, weapon, _object)
+    persistWeapon(weapon)
+end
+
+local function onWeaponHitTree(_owner, weapon)
+    persistWeapon(weapon)
+end
+
+local function onPlayerAttackFinished(_player, weapon)
+    persistWeapon(weapon)
+end
+
+local function addEvent(event, handler)
+    if event and event.Add then
+        event.Add(handler)
+    end
+end
+
 if Events and Events.OnGameStart then
     Events.OnGameStart.Add(restoreAllPlayers)
 end
@@ -599,4 +635,12 @@ end
 
 if Events and Events.OnSave then
     Events.OnSave.Add(persistAllPlayers)
+end
+
+if Events then
+    addEvent(Events.OnHitZombie, onHitZombie)
+    addEvent(Events.OnWeaponHitCharacter, onWeaponHitCharacter)
+    addEvent(Events.OnWeaponHitThumpable, onWeaponHitThumpable)
+    addEvent(Events.OnWeaponHitTree, onWeaponHitTree)
+    addEvent(Events.OnPlayerAttackFinished, onPlayerAttackFinished)
 end

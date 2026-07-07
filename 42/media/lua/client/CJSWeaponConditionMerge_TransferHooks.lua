@@ -1,6 +1,6 @@
 require "CJSWeaponConditionMerge"
 require "TimedActions/ISInventoryTransferAction"
-require "TimedActions/ISDropItemAction"
+require "TimedActions/ISDropWorldItemAction"
 
 local function isCharacterInventoryContainer(container, character)
     if not container or not character or not container.isInCharacterInventory then
@@ -40,16 +40,17 @@ if ISInventoryTransferAction and ISInventoryTransferAction.transferItem and
     ISInventoryTransferAction.cjsWeaponConditionMergePatched = true
 end
 
-if ISDropItemAction and ISDropItemAction.perform and not ISDropItemAction.cjsWeaponConditionMergePatched then
-    local originalDropPerform = ISDropItemAction.perform
+if ISDropWorldItemAction and ISDropWorldItemAction.complete and
+        not ISDropWorldItemAction.cjsWeaponConditionMergePatched then
+    local originalDropComplete = ISDropWorldItemAction.complete
 
-    function ISDropItemAction:perform()
+    function ISDropWorldItemAction:complete()
         if CJSWeaponConditionMerge and self.item then
             CJSWeaponConditionMerge.persistItemTreeState(self.item)
         end
 
-        return originalDropPerform(self)
+        return originalDropComplete(self)
     end
 
-    ISDropItemAction.cjsWeaponConditionMergePatched = true
+    ISDropWorldItemAction.cjsWeaponConditionMergePatched = true
 end

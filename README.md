@@ -16,7 +16,7 @@ Behavior:
 - The merged weapon's max condition becomes the new current condition, so `10/10 + 5/10 = 15/15`.
 - Damage is recalculated from the kept weapon's original min/max damage.
 - Stacked condition is stored in item mod data and restored when the save is loaded.
-- Stacked condition is refreshed when moved into storage and restored when taken back out.
+- Stacked condition is refreshed after weapon use and storage moves, then restored when taken back out or reloaded.
 - Weapon Mastery System compatibility: merged condition/damage replay as the weapon's base stats before mastery affixes are reapplied.
 - Weapon Mastery System compatibility: stacked names are preserved inside mastery affix names, and mastery's upgrade repair is disabled for merged weapons.
 
