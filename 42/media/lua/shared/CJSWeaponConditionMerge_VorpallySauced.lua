@@ -77,7 +77,7 @@ local function persistVorpallyCondition(weapon)
 
     data.savedCondition = weapon.getCondition and weapon:getCondition() or data.savedCondition
 
-    if weapon.hasHeadCondition and weapon:hasHeadCondition() then
+    if weapon:hasHeadCondition() then
         data.savedHeadCondition = weapon:getHeadCondition()
     end
 
@@ -94,6 +94,8 @@ local function compatibilitySignature(weapon, data)
         tostring(itemData.cjsWcmStacks or ""),
         tostring(itemData.cjsWcmConditionMax or ""),
         tostring(itemData.cjsWcmCondition or ""),
+        tostring(itemData.cjsWcmHeadConditionMax or ""),
+        tostring(itemData.cjsWcmHeadCondition or ""),
         tostring(itemData.cjsWcmBaseMinDamage or ""),
         tostring(itemData.cjsWcmBaseMaxDamage or ""),
         tostring(vorpally.prefixId or ""),
@@ -150,16 +152,22 @@ local function patchForeignStats()
     function foreignStats.replay(weapon)
         local sourceCondition = nil
         local sourceConditionMax = nil
+        local sourceHeadCondition = nil
+        local sourceHeadConditionMax = nil
         if weapon then
             sourceCondition = weapon:getCondition()
             sourceConditionMax = weapon:getConditionMax()
+            if weapon:hasHeadCondition() then
+                sourceHeadCondition = weapon:getHeadCondition()
+                sourceHeadConditionMax = weapon:getHeadConditionMax()
+            end
         end
 
         local result = originalReplay(weapon)
 
         if M.isStackedWeapon and M.isStackedWeapon(weapon) and M.refreshItemState then
             M._cjsWcmVorpallyReplayDepth = (M._cjsWcmVorpallyReplayDepth or 0) + 1
-            local ok, err = pcall(M.refreshItemState, nil, weapon, sourceCondition, sourceConditionMax)
+            local ok, err = pcall(M.refreshItemState, nil, weapon, sourceCondition, sourceConditionMax, sourceHeadCondition, sourceHeadConditionMax)
             M._cjsWcmVorpallyReplayDepth = M._cjsWcmVorpallyReplayDepth - 1
 
             if not ok then

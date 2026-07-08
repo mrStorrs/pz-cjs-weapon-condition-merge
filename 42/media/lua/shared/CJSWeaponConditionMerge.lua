@@ -7,6 +7,8 @@ local DATA_KEYS = {
     baseMaxDamage = "cjsWcmBaseMaxDamage",
     condition = "cjsWcmCondition",
     conditionMax = "cjsWcmConditionMax",
+    headCondition = "cjsWcmHeadCondition",
+    headConditionMax = "cjsWcmHeadConditionMax",
 }
 
 local DEFAULTS = {
@@ -26,6 +28,18 @@ local FIREARM_PART_TYPES = {
 }
 
 local M = {}
+local loggedWarnings = {}
+
+local function warnOnce(message)
+    if loggedWarnings[message] then
+        return
+    end
+
+    loggedWarnings[message] = true
+    if print then
+        print("[" .. MOD_ID .. "] " .. tostring(message))
+    end
+end
 
 local function sandboxOption(key)
     local vars = SandboxVars and SandboxVars.CJSWeaponConditionMerge
@@ -163,6 +177,92 @@ local function safeMethodValue(item, methodName, ...)
     return nil
 end
 
+local function hasHeadCondition(item)
+    return item and item:hasHeadCondition() == true
+end
+
+local function headCondition(item)
+    if not hasHeadCondition(item) then
+        return 0
+    end
+
+    return item:getHeadCondition()
+end
+
+local function headConditionMax(item)
+    if not hasHeadCondition(item) then
+        return 0
+    end
+
+    return item:getHeadConditionMax()
+end
+
+local function setHeadConditionMax(item, conditionMax)
+    if not hasHeadCondition(item) then
+        return false
+    end
+
+    conditionMax = round(conditionMax)
+    if conditionMax < 1 then
+        conditionMax = 1
+    end
+
+    if headConditionMax(item) == conditionMax then
+        return false
+    end
+
+    if not Attribute or not Attribute.HeadConditionMax then
+        warnOnce("Unable to update HeadConditionMax; merged head condition may clamp to the old maximum")
+        return false
+    end
+
+    local attributes = item:getAttributes()
+    if not attributes then
+        warnOnce("Unable to update HeadConditionMax; item has no attribute container")
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return attributes:putFromScript(Attribute.HeadConditionMax, tostring(conditionMax))
+    end)
+    if not ok then
+        warnOnce("Unable to update HeadConditionMax: " .. tostring(result))
+        return false
+    end
+
+    if result == false then
+        warnOnce("Unable to update HeadConditionMax; attribute rejected value " .. tostring(conditionMax))
+        return false
+    end
+
+    return true
+end
+
+local function setHeadCondition(item, condition)
+    if not hasHeadCondition(item) then
+        return false
+    end
+
+    condition = round(condition)
+    if condition < 0 then
+        condition = 0
+    end
+
+    if headCondition(item) == condition then
+        return false
+    end
+
+    local ok, err = pcall(function()
+        item:setHeadCondition(condition)
+    end)
+    if not ok then
+        warnOnce("Unable to update HeadCondition: " .. tostring(err))
+        return false
+    end
+
+    return true
+end
+
 local function hasAmmoCapacity(item)
     local maxAmmo = tonumber(safeMethodValue(item, "getMaxAmmo"))
     if maxAmmo and maxAmmo > 0 then
@@ -216,12 +316,20 @@ local function syncWeapon(character, weapon)
     end
 end
 
-local function persistConditionState(item, conditionMax, condition)
+local function persistConditionState(item, conditionMax, condition, conditionHeadMax, conditionHead)
     local data = modData(item)
     if not data then return end
 
     data[DATA_KEYS.conditionMax] = conditionMax or item:getConditionMax()
     data[DATA_KEYS.condition] = condition or item:getCondition()
+
+    if hasHeadCondition(item) then
+        data[DATA_KEYS.headConditionMax] = conditionHeadMax or headConditionMax(item)
+        data[DATA_KEYS.headCondition] = conditionHead or headCondition(item)
+    else
+        data[DATA_KEYS.headConditionMax] = nil
+        data[DATA_KEYS.headCondition] = nil
+    end
 end
 
 local function storedConditionMax(item, data, stacks)
@@ -273,6 +381,67 @@ local function liveCondition(sourceCondition, sourceConditionMax, targetMax)
     return clamp(round(currentCondition), 0, targetMax)
 end
 
+local function storedHeadConditionMax(item, data)
+    if not hasHeadCondition(item) then
+        return nil
+    end
+
+    local storedMax = tonumber(data[DATA_KEYS.headConditionMax])
+    if storedMax and storedMax >= 1 then
+        return round(storedMax)
+    end
+
+    return nil
+end
+
+local function storedHeadCondition(item, data, targetMax)
+    if not targetMax then
+        return nil
+    end
+
+    local currentMax = headConditionMax(item)
+    local currentCondition = clamp(headCondition(item), 0, targetMax)
+
+    if currentMax == targetMax then
+        return currentCondition
+    end
+
+    local storedValue = tonumber(data[DATA_KEYS.headCondition])
+    if storedValue and storedValue >= 0 then
+        return clamp(round(storedValue), 0, targetMax)
+    end
+
+    if currentMax > 0 and targetMax > currentMax then
+        return clamp(round((currentCondition / currentMax) * targetMax), 0, targetMax)
+    end
+
+    return currentCondition
+end
+
+local function applyHeadConditionState(item, targetHeadMax, targetHeadCondition)
+    if not targetHeadMax or not targetHeadCondition or not hasHeadCondition(item) then
+        return false
+    end
+
+    targetHeadMax = round(targetHeadMax)
+    if targetHeadMax < 1 then
+        targetHeadMax = 1
+    end
+
+    targetHeadCondition = clamp(round(targetHeadCondition), 0, targetHeadMax)
+    local changed = false
+
+    if setHeadConditionMax(item, targetHeadMax) then
+        changed = true
+    end
+
+    if setHeadCondition(item, targetHeadCondition) then
+        changed = true
+    end
+
+    return changed
+end
+
 local function applyDamage(item, stacks)
     local damageFactor = 1.0 + ((stacks - 1) * (M.damagePercentPerStack() / 100.0))
     local newMinDamage = baseMinDamage(item) * damageFactor
@@ -292,8 +461,12 @@ local function applyDamage(item, stacks)
     return changed
 end
 
-local function applyItemState(character, item, data, stacks, targetMax, targetCondition)
+local function applyItemState(character, item, data, stacks, targetMax, targetCondition, targetHeadMax, targetHeadCondition)
     local changed = false
+
+    if targetHeadCondition and targetHeadCondition <= 0 then
+        targetCondition = 0
+    end
 
     if item:getConditionMax() ~= targetMax then
         item:setConditionMax(targetMax)
@@ -307,6 +480,10 @@ local function applyItemState(character, item, data, stacks, targetMax, targetCo
 
     if targetCondition > 0 and item.setBroken and item:isBroken() then
         item:setBroken(false)
+        changed = true
+    end
+
+    if applyHeadConditionState(item, targetHeadMax, targetHeadCondition) then
         changed = true
     end
 
@@ -326,7 +503,7 @@ local function applyItemState(character, item, data, stacks, targetMax, targetCo
         changed = true
     end
 
-    persistConditionState(item, targetMax, targetCondition)
+    persistConditionState(item, targetMax, targetCondition, targetHeadMax, targetHeadCondition)
 
     if changed then
         syncWeapon(character, item)
@@ -445,7 +622,9 @@ function M.restoreItemState(character, item)
     end
 
     local targetCondition = storedCondition(item, data, targetMax)
-    local changed = applyItemState(character, item, data, stacks, targetMax, targetCondition)
+    local targetHeadMax = storedHeadConditionMax(item, data)
+    local targetHeadCondition = storedHeadCondition(item, data, targetHeadMax)
+    local changed = applyItemState(character, item, data, stacks, targetMax, targetCondition, targetHeadMax, targetHeadCondition)
 
     if M.afterRestoreItemState then
         M.afterRestoreItemState(character, item, changed)
@@ -454,7 +633,7 @@ function M.restoreItemState(character, item)
     return changed
 end
 
-function M.refreshItemState(character, item, sourceCondition, sourceConditionMax)
+function M.refreshItemState(character, item, sourceCondition, sourceConditionMax, sourceHeadCondition, sourceHeadConditionMax)
     if not M.isStackedWeapon(item) then
         return false
     end
@@ -473,8 +652,16 @@ function M.refreshItemState(character, item, sourceCondition, sourceConditionMax
     local currentCondition = sourceCondition or item:getCondition()
     local currentMax = sourceConditionMax or item:getConditionMax()
     local targetCondition = liveCondition(currentCondition, currentMax, targetMax)
+    local targetHeadMax = storedHeadConditionMax(item, data)
+    local targetHeadCondition = storedHeadCondition(item, data, targetHeadMax)
 
-    return applyItemState(character, item, data, stacks, targetMax, targetCondition)
+    if targetHeadMax then
+        local currentHeadCondition = sourceHeadCondition or headCondition(item)
+        local currentHeadMax = sourceHeadConditionMax or headConditionMax(item)
+        targetHeadCondition = liveCondition(currentHeadCondition, currentHeadMax, targetHeadMax)
+    end
+
+    return applyItemState(character, item, data, stacks, targetMax, targetCondition, targetHeadMax, targetHeadCondition)
 end
 
 function M.eachStackedContainerItem(container, callback)
@@ -544,6 +731,22 @@ function M.merge(character, target, donor)
 
     local newCondition = round(target:getCondition() + (donor:getCondition() * conditionMultiplier))
     local newMaxCondition = newCondition
+    local newHeadCondition = nil
+    local newMaxHeadCondition = nil
+
+    if hasHeadCondition(target) and hasHeadCondition(donor) then
+        newHeadCondition = round(headCondition(target) + (headCondition(donor) * conditionMultiplier))
+        newMaxHeadCondition = newHeadCondition
+
+        if newHeadCondition <= 0 then
+            newCondition = 0
+            newMaxCondition = 1
+        end
+
+        if newMaxHeadCondition < 1 then
+            newMaxHeadCondition = 1
+        end
+    end
 
     if newMaxCondition < 1 then
         newMaxCondition = 1
@@ -556,6 +759,8 @@ function M.merge(character, target, donor)
         target:setBroken(false)
     end
 
+    applyHeadConditionState(target, newMaxHeadCondition, newHeadCondition)
+
     applyDamage(target, newStacks)
 
     local data = modData(target)
@@ -564,7 +769,7 @@ function M.merge(character, target, donor)
         data[DATA_KEYS.baseName] = baseName(target)
     end
 
-    persistConditionState(target, newMaxCondition, newCondition)
+    persistConditionState(target, newMaxCondition, newCondition, newMaxHeadCondition, newHeadCondition)
 
     target:setName(M.stackedDisplayName(target))
 

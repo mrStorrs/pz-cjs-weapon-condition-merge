@@ -26,12 +26,45 @@ local function selectedMergeTarget(playerObj, items)
     return nil
 end
 
+local function hasHeadCondition(item)
+    return item and item:hasHeadCondition()
+end
+
+local function headConditionMax(item)
+    if hasHeadCondition(item) then
+        return item:getHeadConditionMax()
+    end
+
+    return 0
+end
+
+local function headCondition(item)
+    if hasHeadCondition(item) then
+        return item:getHeadCondition()
+    end
+
+    return 0
+end
+
+local function conditionLabel(item)
+    if hasHeadCondition(item) then
+        return string.format(
+            "handle %d/%d, head %d/%d",
+            item:getCondition(),
+            item:getConditionMax(),
+            item:getHeadCondition(),
+            item:getHeadConditionMax()
+        )
+    end
+
+    return string.format("%d/%d", item:getCondition(), item:getConditionMax())
+end
+
 local function donorLabel(donor)
     return string.format(
-        "%s (%d/%d, %s)",
+        "%s (%s, %s)",
         donor:getDisplayName(),
-        donor:getCondition(),
-        donor:getConditionMax(),
+        conditionLabel(donor),
         CJSWeaponConditionMerge.stackLabel(donor)
     )
 end
@@ -85,7 +118,19 @@ local function matchingDonors(playerObj, target)
             return left:getConditionMax() > right:getConditionMax()
         end
 
-        return left:getCondition() > right:getCondition()
+        if left:getCondition() ~= right:getCondition() then
+            return left:getCondition() > right:getCondition()
+        end
+
+        if headConditionMax(left) ~= headConditionMax(right) then
+            return headConditionMax(left) > headConditionMax(right)
+        end
+
+        if headCondition(left) ~= headCondition(right) then
+            return headCondition(left) > headCondition(right)
+        end
+
+        return left:getDisplayName() < right:getDisplayName()
     end)
 
     return donors

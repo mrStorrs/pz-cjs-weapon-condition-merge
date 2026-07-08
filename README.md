@@ -12,10 +12,11 @@ Behavior:
 - Favorited or equipped donor weapons are ignored.
 - Stack counts add together: `1x + 1x = 2x`, `2x + 1x = 3x`, `2x + 2x = 4x`.
 - The kept weapon is renamed to `Base Name Nx`.
-- The donor weapon's current condition is multiplied by the sandbox condition multiplier, then added to the kept weapon.
-- The merged weapon's max condition becomes the new current condition, so `10/10 + 5/10 = 15/15`.
+- The donor weapon's current handle condition is multiplied by the sandbox condition multiplier, then added to the kept weapon.
+- The merged weapon's max handle condition becomes the new current handle condition, so `10/10 + 5/10 = 15/15`.
+- Weapons with separate B42 head condition merge head condition the same way, so `2/5 + 5/5 = 7/7`.
 - Damage is recalculated from the kept weapon's original min/max damage.
-- Stacked condition is persisted from live weapons during play and restored only when the save is loaded.
+- Stacked handle and head condition are persisted from live weapons during play and restored only when the save is loaded.
 - Storage moves persist the current item state without restoring an older condition value.
 - Weapon Mastery System compatibility: merged condition/damage replay as the weapon's base stats before mastery affixes are reapplied.
 - Weapon Mastery System compatibility: stacked names are preserved inside mastery affix names, and mastery's upgrade repair is disabled for merged weapons.
