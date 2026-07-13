@@ -1,7 +1,7 @@
 name=CJS Weapon Condition Merge
 id=cjsWeaponConditionMerge
-description=Merge matching weapons and firearms to combine condition, stack names, and scale damage.
+description=Merge compatible weapons and firearms to combine condition, stack names, and scale damage.
 poster=poster.png
 author=CJ Storrs
-modversion=0.1.8
+modversion=0.1.9
 versionMin=42.0.0

@@ -27,6 +27,38 @@ local FIREARM_PART_TYPES = {
     "Clip",
 }
 
+local CROSS_TYPE_DONORS = {
+    ["MoreTraits.AntiqueAxe"] = {
+        ["Base.AxeStone"] = true,
+    },
+    ["MoreTraits.Thumper"] = {
+        ["Base.StoneMaul"] = true,
+    },
+    ["MoreTraits.ObsidianBlade"] = {
+        ["Base.StoneKnifeLong"] = true,
+        ["Base.FlintKnife"] = true,
+    },
+    ["MoreTraits.BloodyCrowbar"] = {
+        ["Base.Crowbar"] = true,
+        ["Base.CrowbarForged"] = true,
+    },
+    ["MoreTraits.Slugger"] = {
+        ["Base.BaseballBat_Metal"] = true,
+    },
+    ["MoreTraits.AntiqueSpear"] = {
+        ["Base.SpearCrafted"] = true,
+        ["Base.SpearCraftedFireHardened"] = true,
+    },
+    ["MoreTraits.AntiqueHammer"] = {
+        ["Base.ClubHammer"] = true,
+        ["Base.ClubHammerForged"] = true,
+        ["Base.SmithingHammer"] = true,
+    },
+    ["MoreTraits.AntiqueKatana"] = {
+        ["Base.Katana"] = true,
+    },
+}
+
 local M = {}
 local loggedWarnings = {}
 
@@ -569,6 +601,15 @@ function M.isSafeMergeDonor(item)
     return not hasLoadedAmmo(item) and not hasAttachedWeaponParts(item)
 end
 
+function M.areMergeTypesCompatible(targetFullType, donorFullType)
+    if targetFullType == donorFullType then
+        return true
+    end
+
+    local allowedDonors = CROSS_TYPE_DONORS[targetFullType]
+    return allowedDonors ~= nil and allowedDonors[donorFullType] == true
+end
+
 function M.canMerge(target, donor)
     if not M.isMergeableWeapon(target) or not M.isMergeableWeapon(donor) then
         return false
@@ -578,7 +619,8 @@ function M.canMerge(target, donor)
         return false
     end
 
-    return target:getFullType() == donor:getFullType() and M.isSafeMergeDonor(donor)
+    return M.areMergeTypesCompatible(target:getFullType(), donor:getFullType())
+        and M.isSafeMergeDonor(donor)
 end
 
 function M.isStackedWeapon(item)
