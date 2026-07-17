@@ -17,6 +17,7 @@ Behavior:
 - The merged weapon's max handle condition becomes the new current handle condition, so `10/10 + 5/10 = 15/15`.
 - Weapons with separate B42 head condition merge head condition the same way, so `2/5 + 5/5 = 7/7`.
 - When only the donor has separate head condition, its head condition is not transferred.
+- Every successful merge restores the kept weapon's sharpness to its own maximum.
 - Damage is recalculated from the kept weapon's original min/max damage.
 - Stacked handle and head condition are persisted from live weapons during play and restored only when the save is loaded.
 - Storage moves persist the current item state without restoring an older condition value.

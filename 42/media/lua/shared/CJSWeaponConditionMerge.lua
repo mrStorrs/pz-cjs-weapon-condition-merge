@@ -819,6 +819,8 @@ function M.merge(character, target, donor)
         M.afterMerge(character, target, donor)
     end
 
+    target:applyMaxSharpness()
+
     syncWeapon(character, target)
 
     local donorContainer = donor:getContainer()
