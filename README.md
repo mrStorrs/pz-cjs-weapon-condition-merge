@@ -7,7 +7,7 @@ Right-click the weapon you want to keep, choose **Merge Weapon Condition**, then
 Behavior:
 
 - Weapons with the same `FullType` can merge.
-- More Traits Antique Collector weapons can consume the directional vanilla donors listed below.
+- More Traits Antique Collector replacements and legacy antique weapons can consume the directional vanilla donors listed below.
 - Firearm donors must be unloaded, with no inserted magazine, chambered round, or attached weapon parts.
 - Broken or zero-condition weapons can be merged.
 - Favorited or equipped donor weapons are ignored.
@@ -24,7 +24,19 @@ Behavior:
 - Weapon Mastery System compatibility: merged condition/damage replay as the weapon's base stats before mastery affixes are reapplied.
 - Weapon Mastery System compatibility: stacked names are preserved inside mastery affix names, and mastery's upgrade repair is disabled for merged weapons.
 
-More Traits Antique Collector donors:
+Current Legendary Antique Collector donors:
+
+- Tactical Sword: Sword.
+- Tactical Tomahawk: Hand Axe (Hatchet).
+- Tactical Axe: Axe (Firefighter Axe).
+- Tactical Crowbar: Crowbar.
+- Tactical Bat: Metal Baseball Bat.
+- Tactical Hammer: Ball-Peen Hammer.
+- Tactical Knife: Fighting Knife.
+- Tactical Sledgehammer: Sledgehammer.
+- Tactical Spear: Large-Knife Spear.
+
+Legacy More Traits antique donors:
 
 - Antique Axe: Stone Axe.
 - Maul: Stone Maul.
@@ -35,7 +47,10 @@ More Traits Antique Collector donors:
 - Antique Forge Hammer: Club Hammer, Forged Club Hammer, or Smithing Hammer. Only handle condition transfers because the antique weapon has no separate head condition.
 - Antique Katana: Katana only.
 
-These mappings are directional: the antique weapon must be the retained target, and the vanilla weapon is consumed as the donor. More Traits is optional and is not required to use normal same-type merging.
+These mappings are directional: the Legendary replacement or legacy antique
+weapon must be the retained target, and the vanilla weapon is consumed as the
+donor. More Traits and Legendary Tactical Weapons remain optional; neither is
+required for normal same-type merging.
 
 Sandbox defaults:
 

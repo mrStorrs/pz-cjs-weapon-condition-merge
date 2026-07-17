@@ -28,6 +28,33 @@ local FIREARM_PART_TYPES = {
 }
 
 local CROSS_TYPE_DONORS = {
+    ["LTW.LegendaryTacticalSword"] = {
+        ["Base.Sword"] = true,
+    },
+    ["LTW.LegendaryTacticalTomahawk"] = {
+        ["Base.HandAxe"] = true,
+    },
+    ["LTW.LegendaryTacticalAxe"] = {
+        ["Base.Axe"] = true,
+    },
+    ["LTW.LegendaryTacticalCrowbar"] = {
+        ["Base.Crowbar"] = true,
+    },
+    ["LTW.LegendaryTacticalBat"] = {
+        ["Base.BaseballBat_Metal"] = true,
+    },
+    ["LTW.LegendaryTacticalHammer"] = {
+        ["Base.BallPeenHammer"] = true,
+    },
+    ["LTW.LegendaryTacticalKnife"] = {
+        ["Base.FightingKnife"] = true,
+    },
+    ["LTW.LegendaryTacticalSledgehammer"] = {
+        ["Base.Sledgehammer"] = true,
+    },
+    ["LTW.LegendaryTacticalSpear"] = {
+        ["Base.SpearLargeKnife"] = true,
+    },
     ["MoreTraits.AntiqueAxe"] = {
         ["Base.AxeStone"] = true,
     },
