@@ -22,7 +22,7 @@ Behavior:
 - Stacked handle and head condition are persisted from live weapons during play and restored only when the save is loaded.
 - Storage moves persist the current item state without restoring an older condition value.
 - Weapon Mastery System compatibility: merged condition/damage replay as the weapon's base stats before mastery affixes are reapplied.
-- Weapon Mastery System compatibility: stacked names are preserved inside mastery affix names, and mastery's upgrade repair is disabled for merged weapons.
+- Weapon Mastery System compatibility: stacked names are preserved inside mastery affix names, and mastery's full upgrade repair is disabled for merged weapons. A newly gained maximum-durability modifier adds its new capacity to current condition while preserving existing wear.
 
 Current Legendary Antique Collector donors:
 

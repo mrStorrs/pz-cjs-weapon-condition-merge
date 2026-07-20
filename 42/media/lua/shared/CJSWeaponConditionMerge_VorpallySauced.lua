@@ -2,6 +2,7 @@ require "CJSWeaponConditionMerge"
 
 local MOD_ID = "cjsWeaponConditionMerge"
 local VORPALLY_KEY = "VorpallySauced"
+local VORPALLY_BASE_CONDITION_MAX_KEY = "cjsWcmVorpallyBaseConditionMax"
 
 local M = CJSWeaponConditionMerge
 if not M then
@@ -9,6 +10,7 @@ if not M then
 end
 
 local appliedSignatures = {}
+local reapplyStates = {}
 
 local function log(message)
     if print then
@@ -150,11 +152,12 @@ local function patchForeignStats()
     foreignStats.cjsWcmOriginalReplay = originalReplay
 
     function foreignStats.replay(weapon)
-        local sourceCondition = nil
-        local sourceConditionMax = nil
-        local sourceHeadCondition = nil
-        local sourceHeadConditionMax = nil
-        if weapon then
+        local preservedState = reapplyStates[weaponKey(weapon)]
+        local sourceCondition = preservedState and preservedState.condition or nil
+        local sourceConditionMax = preservedState and preservedState.conditionMax or nil
+        local sourceHeadCondition = preservedState and preservedState.headCondition or nil
+        local sourceHeadConditionMax = preservedState and preservedState.headConditionMax or nil
+        if weapon and not preservedState then
             sourceCondition = weapon:getCondition()
             sourceConditionMax = weapon:getConditionMax()
             if weapon:hasHeadCondition() then
@@ -176,6 +179,45 @@ local function patchForeignStats()
         end
 
         return result
+    end
+
+    return true
+end
+
+local function patchReapply()
+    local reapply = VorpallySauced
+        and VorpallySauced.StatModifiers
+        and VorpallySauced.StatModifiers.Reapply
+    if not reapply or not reapply.reapplyUpgrades or reapply.cjsWcmReapplyPatched then
+        return false
+    end
+
+    local originalReapply = reapply.reapplyUpgrades
+    reapply.cjsWcmReapplyPatched = true
+    reapply.cjsWcmOriginalReapply = originalReapply
+
+    function reapply.reapplyUpgrades(weapon)
+        if not M.isStackedWeapon or not M.isStackedWeapon(weapon) then
+            return originalReapply(weapon)
+        end
+
+        local key = weaponKey(weapon)
+        reapplyStates[key] = {
+            condition = weapon:getCondition(),
+            conditionMax = weapon:getConditionMax(),
+            headCondition = weapon:hasHeadCondition() and weapon:getHeadCondition() or nil,
+            headConditionMax = weapon:hasHeadCondition() and weapon:getHeadConditionMax() or nil,
+        }
+
+        local results = { pcall(originalReapply, weapon) }
+        reapplyStates[key] = nil
+
+        if not results[1] then
+            error(results[2])
+        end
+
+        M.persistItemState(weapon)
+        return results[2], results[3], results[4]
     end
 
     return true
@@ -233,6 +275,160 @@ local function patchNameHelpers()
     return patched
 end
 
+local function getVorpallyAffix(affixType, affixId, isFirearm)
+    if not affixId or not VorpallySauced then
+        return nil
+    end
+
+    if affixType == "prefix" then
+        local getter = isFirearm and VorpallySauced.getFirearmPrefix or VorpallySauced.getPrefix
+        return getter and getter(affixId) or nil
+    elseif affixType == "suffix" then
+        local getter = isFirearm and VorpallySauced.getFirearmSuffix or VorpallySauced.getSuffix
+        return getter and getter(affixId) or nil
+    elseif affixType == "bonding" then
+        local getter = isFirearm and VorpallySauced.getFirearmBonding or VorpallySauced.getBonding
+        return getter and getter(affixId) or nil
+    end
+
+    return nil
+end
+
+local function affixConditionMaxMultiplier(affixType, affixId, isFirearm)
+    local affix = getVorpallyAffix(affixType, affixId, isFirearm)
+    if not affix then
+        return nil
+    end
+
+    local value = nil
+    if affix.stat == "conditionMax" then
+        value = affix.value
+    elseif affix.stats then
+        value = affix.stats.conditionMax
+    end
+
+    value = tonumber(value)
+    return value and value > 0 and value or nil
+end
+
+local function effectiveConditionMaxMultiplier(data, isFirearm)
+    if type(data) ~= "table" then
+        return 1.0
+    end
+
+    local multiplier = 1.0
+    local orderedAffixes = {
+        { "prefix", data.prefixId },
+        { "suffix", data.suffixId },
+        { "bonding", data.bondingId },
+    }
+
+    for _, entry in ipairs(orderedAffixes) do
+        local value = affixConditionMaxMultiplier(entry[1], entry[2], isFirearm)
+        if value then
+            multiplier = value
+        end
+    end
+
+    return multiplier
+end
+
+local function rememberVorpallyBaseConditionMax(weapon, effectiveMultiplier)
+    local itemData = cjsModData(weapon)
+    local currentMax = weapon and tonumber(weapon:getConditionMax()) or nil
+    effectiveMultiplier = tonumber(effectiveMultiplier) or 1.0
+    if not itemData or not currentMax or currentMax < 1 or effectiveMultiplier <= 0 then
+        return nil
+    end
+
+    local baseMax = currentMax / effectiveMultiplier
+    itemData[VORPALLY_BASE_CONDITION_MAX_KEY] = baseMax
+    return baseMax
+end
+
+local function patchCoreStats()
+    local coreStats = VorpallySauced
+        and VorpallySauced.StatModifiers
+        and VorpallySauced.StatModifiers.Core
+    if not coreStats or not coreStats.applyStat or coreStats.cjsWcmApplyStatPatched then
+        return false
+    end
+
+    local originalApplyStat = coreStats.applyStat
+    coreStats.cjsWcmApplyStatPatched = true
+    coreStats.cjsWcmOriginalApplyStat = originalApplyStat
+
+    function coreStats.applyStat(weapon, statName, value, originalStats)
+        if statName ~= "conditionMax" or not M.isStackedWeapon or not M.isStackedWeapon(weapon) then
+            return originalApplyStat(weapon, statName, value, originalStats)
+        end
+
+        local multiplier = tonumber(value)
+        local itemData = cjsModData(weapon)
+        if not multiplier or multiplier <= 0 or not itemData then
+            return originalApplyStat(weapon, statName, value, originalStats)
+        end
+
+        local baseMax = tonumber(itemData[VORPALLY_BASE_CONDITION_MAX_KEY])
+        if not baseMax or baseMax <= 0 then
+            local data = vorpallyData(weapon)
+            local isFirearm = type(data) == "table" and data.isFirearm == true
+            local effectiveMultiplier = effectiveConditionMaxMultiplier(data, isFirearm)
+            local storedMax = tonumber(itemData.cjsWcmConditionMax) or weapon:getConditionMax()
+            baseMax = storedMax / effectiveMultiplier
+            itemData[VORPALLY_BASE_CONDITION_MAX_KEY] = baseMax
+        end
+
+        local targetMax = math.max(1, math.floor((baseMax * multiplier) + 0.000001))
+        weapon:setConditionMax(targetMax)
+    end
+
+    return true
+end
+
+--- Add only the condition created by a newly gained maximum-durability modifier.
+--- The previous damage deficit is preserved even when the merged maximum is large.
+function M.addVorpallyDurabilityGain(weapon, previousMax, previousCondition, previousMultiplier, newMultiplier)
+    previousMax = math.floor(tonumber(previousMax) or 0)
+    previousCondition = math.floor(tonumber(previousCondition) or 0)
+    previousMultiplier = tonumber(previousMultiplier) or 1.0
+    newMultiplier = tonumber(newMultiplier)
+
+    if not weapon or previousMax < 1 or previousMultiplier <= 0 or not newMultiplier or newMultiplier <= 0 then
+        return false, 0
+    end
+
+    previousCondition = math.max(0, math.min(previousCondition, previousMax))
+
+    -- VPS conditionMax modifiers replace earlier conditionMax multipliers in
+    -- prefix -> suffix -> bonding order. Apply the ratio to the merged maximum
+    -- so a 1.5x -> 3x transition doubles it instead of tripling it again.
+    local itemData = cjsModData(weapon)
+    local baseMax = itemData and tonumber(itemData[VORPALLY_BASE_CONDITION_MAX_KEY]) or nil
+    if not baseMax or baseMax <= 0 then
+        baseMax = previousMax / previousMultiplier
+    end
+    local scaledMax = math.floor((baseMax * newMultiplier) + 0.000001)
+    local targetMax = math.max(previousMax, scaledMax)
+    local addedCondition = targetMax - previousMax
+    local targetCondition = math.min(targetMax, previousCondition + addedCondition)
+
+    weapon:setConditionMax(targetMax)
+    weapon:setConditionNoSound(targetCondition)
+    if targetCondition > 0 and weapon:isBroken() then
+        weapon:setBroken(false)
+    end
+
+    if itemData then
+        itemData[VORPALLY_BASE_CONDITION_MAX_KEY] = baseMax
+        itemData.cjsWcmConditionMax = targetMax
+        itemData.cjsWcmCondition = targetCondition
+    end
+    persistVorpallyCondition(weapon)
+
+    return addedCondition > 0, addedCondition
+end
+
 local function patchUpgradeManager()
     local upgradeManager = VorpallySauced and VorpallySauced.UpgradeManager or nil
     if not upgradeManager or not upgradeManager.applyUpgrade or upgradeManager.cjsWcmApplyUpgradePatched then
@@ -249,6 +445,11 @@ local function patchUpgradeManager()
         end
 
         clearApplied(weapon)
+
+        local previousMax = weapon:getConditionMax()
+        local previousCondition = weapon:getCondition()
+        local previousMultiplier = effectiveConditionMaxMultiplier(vorpallyData(weapon), isFirearm)
+        local newMultiplier = affixConditionMaxMultiplier(affixType, affixId, isFirearm)
 
         local createdVars = false
         local vars = SandboxVars and SandboxVars[VORPALLY_KEY] or nil
@@ -275,6 +476,16 @@ local function patchUpgradeManager()
             error(results[2])
         end
 
+        if newMultiplier then
+            M.addVorpallyDurabilityGain(
+                weapon,
+                previousMax,
+                previousCondition,
+                previousMultiplier,
+                newMultiplier
+            )
+        end
+
         markApplied(weapon)
 
         return results[2], results[3], results[4]
@@ -291,6 +502,8 @@ function M.installVorpallyCompatibility()
     local patched = false
     patched = patchForeignStats() or patched
     patched = patchNameHelpers() or patched
+    patched = patchCoreStats() or patched
+    patched = patchReapply() or patched
     patched = patchUpgradeManager() or patched
 
     if patched then
@@ -415,6 +628,12 @@ local previousAfterMerge = M.afterMerge
 function M.afterMerge(character, target, donor)
     if previousAfterMerge then
         previousAfterMerge(character, target, donor)
+    end
+
+    local data = vorpallyData(target)
+    if type(data) == "table" then
+        local isFirearm = data.isFirearm == true
+        rememberVorpallyBaseConditionMax(target, effectiveConditionMaxMultiplier(data, isFirearm))
     end
 
     M.reapplyVorpally(character, target)
